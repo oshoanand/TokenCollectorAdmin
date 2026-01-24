@@ -39,12 +39,19 @@ export default function OrdersPage() {
     }
   };
 
-  const handleIssueOrder = (orderId: string, quantity: number) => {
+  const handleIssueOrder = (
+    id: string,
+    tokenCode: string,
+    quantity: number,
+    mobileNumber: string,
+  ) => {
     updateOrderMutation.mutate({
-      id: orderId,
+      id: id,
+      tokenCode: tokenCode,
       tokenStatus: "ISSUED",
       quantity: quantity,
       receivedAt: new Date().toISOString(),
+      mobileNumber: mobileNumber,
     });
   };
 
@@ -180,7 +187,12 @@ export default function OrdersPage() {
                         <Button
                           size="sm"
                           onClick={() =>
-                            handleIssueOrder(order.tokenCode, order.quantity)
+                            handleIssueOrder(
+                              order.id,
+                              order.tokenCode,
+                              order.quantity,
+                              order.mobileNumber,
+                            )
                           }
                           disabled={
                             !order.quantity ||

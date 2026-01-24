@@ -11,20 +11,22 @@ type StatusFilter = "ALL" | "REQUESTED" | "ISSUED";
 const getOrders = async (status: StatusFilter): Promise<Order[]> => {
   const response = await apiRequest({
     method: "get",
-    url: status === "ALL" ? "/api/token/all" : `/api/token/all/${status}`,
+    url:
+      status === "ALL"
+        ? "/api/token/all"
+        : `/api/token/all/${status.toLowerCase()}`,
   });
-  console.log(response);
-  return (response as { results: Order[] }).results;
+
+  return response as Order[];
 };
 
 const updateOrder = async (order: Partial<Order>): Promise<Result> => {
-  console.log(order);
   const response = await apiRequest({
     method: "patch",
-    url: `/api/token/status/${order.quantity}/${order.id}?mobile=${order.mobileNumber}`,
+    url: `/api/token/status/${order.quantity}/${order.tokenCode}?mobile=${order.mobileNumber}&id=${order.id}`,
   });
   // console.log(response);
-  return (response as { data: Result }).data;
+  return response as Result;
 };
 
 export function useOrdersQuery(status: StatusFilter) {
