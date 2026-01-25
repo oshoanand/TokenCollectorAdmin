@@ -45,6 +45,7 @@ export function useUpdateOrderMutation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       toast({
+        variant: "success",
         title: "Order updated",
         description: "The order has been successfully updated.",
       });

@@ -20,9 +20,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Send, Smartphone, Loader2, BellRing } from "lucide-react";
+import { Send, Smartphone, Loader2, BellRing, History } from "lucide-react";
 import { toast } from "sonner"; // Assuming you use Sonner or similar toast
 import { NotificationHistory } from "@/components/notification-history";
+import Link from "next/link";
 
 export default function NotificationsPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -45,16 +46,19 @@ export default function NotificationsPage() {
 
     try {
       // Replace with your actual Node.js API endpoint
-      const response = await fetch("/api/notifications/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: targetType, // 'topic' or 'token'
-          target: formData.target, // topic name or user fcm token
-          title: formData.title,
-          body: formData.body,
-        }),
-      });
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/notifications/send`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: targetType, // 'topic' or 'token'
+            target: formData.target, // topic name or user fcm token
+            title: formData.title,
+            body: formData.body,
+          }),
+        },
+      );
 
       if (response.ok) {
         toast.success("Notification sent successfully!");
@@ -81,6 +85,12 @@ export default function NotificationsPage() {
             Send FCM messages to specific users or broadcast via topics.
           </p>
         </div>
+        <Button variant="outline" className="border border-[#f97415]" asChild>
+          <Link href="/notifications/history">
+            <History className="mr-2 h-4 w-4" />
+            View History
+          </Link>
+        </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7 mt-4">
@@ -235,10 +245,6 @@ export default function NotificationsPage() {
             </CardContent>
           </Card>
         </div>
-      </div>
-
-      <div className="mt-8">
-        <NotificationHistory />
       </div>
     </div>
   );

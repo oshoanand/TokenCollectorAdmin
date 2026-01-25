@@ -90,6 +90,9 @@ export type Order = {
   createdAt: string;
   receivedAt: string | null;
   tokenStatus: "REQUESTED" | "ISSUED";
+  postedBy?: {
+    name: string | null;
+  } | null;
 };
 
 export type Result = {

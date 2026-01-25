@@ -245,6 +245,7 @@ import { format } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChevronLeft, ChevronRight, Search, ArrowUpDown } from "lucide-react";
+import { formatMobile } from "@/utils/utils";
 
 type StatusFilter = "ALL" | "REQUESTED" | "ISSUED";
 
@@ -361,7 +362,7 @@ export default function TokensPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[100px]">Token</TableHead>
-                  <TableHead>Mobile</TableHead>
+                  <TableHead>User Details</TableHead>
                   <TableHead>Order #</TableHead>
                   <TableHead>Yandex Code</TableHead>
                   <TableHead>
@@ -432,7 +433,17 @@ export default function TokensPage() {
                       <TableCell className="font-medium font-mono text-primary">
                         {order.tokenCode}
                       </TableCell>
-                      <TableCell>{order.mobileNumber}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-semibold text-sm">
+                            {order.postedBy?.name || "Unknown User"}
+                          </span>
+
+                          <span className="text-xs text-muted-foreground ">
+                            {formatMobile(order.mobileNumber)}
+                          </span>
+                        </div>
+                      </TableCell>
                       <TableCell>{order.orderNumber}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {order.orderCode}

@@ -111,36 +111,6 @@ model User {
   jobFinishedBy      Job[]               @relation("JobFinishedBy")
 }
 
-// model Feedback {
-//   id           Int      @id @default(autoincrement())
-//   name         String
-//   mobile       String
-//   email        String?
-//   message      String
-//   category     String
-//   messagePhoto String?
-//   status       String   @default("Created")
-//   createdAt    DateTime @default(now())
-//   photo        User     @relation(fields: [mobile], references: [mobile])
-// }
-
-// model Blog {
-//   id          Int      @id @default(autoincrement())
-//   title       String   @unique
-//   description String?
-//   slug        String
-//   content     String
-//   category    String
-//   subCategory String?
-//   tags        String?
-//   image       String?
-//   readingTime String?
-//   status      String   @default("Published")
-//   createdAt   DateTime @default(now())
-//   author      User?    @relation(fields: [authorId], references: [id])
-//   authorId    String?
-// }
-
 model Job {
   id            Int       @id @default(autoincrement())
   description   String?
@@ -194,12 +164,4 @@ model Order {
   paymentStatus     String?
   orderDate         DateTime  @default(now())
   orderDispatchDate DateTime?
-}
-
-model Delivery {
-  id            Int      @id @default(autoincrement())
-  fullName      String
-  passport      String
-  deliveryPhoto String[]
-  createdAt     DateTime @default(now())
 }

@@ -30,7 +30,9 @@ export function NotificationHistory() {
   // Function to refresh data
   const fetchHistory = async () => {
     try {
-      const res = await fetch("/api/notifications/history");
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/notifications/history`,
+      );
       const data = await res.json();
       setLogs(data);
     } catch (error) {
@@ -46,34 +48,85 @@ export function NotificationHistory() {
 
   return (
     <Card className="mt-6">
-      {/* ... Header ... */}
+      <CardHeader>
+        <CardTitle>Sent History</CardTitle>
+      </CardHeader>
       <CardContent>
         <Table>
-          {/* ... Table Header ... */}
+          <TableHeader>
+            <TableRow>
+              <TableHead>Status</TableHead>
+              <TableHead>Message</TableHead>
+              <TableHead>Target</TableHead>
+              <TableHead className="text-right">Sent At</TableHead>
+            </TableRow>
+          </TableHeader>
           <TableBody>
-            {/* ... Loading/Empty states ... */}
-
-            {logs.map((log) => (
-              <TableRow key={log.id}>
-                {" "}
-                {/* CHANGED: key={log.id} */}
-                <TableCell>
-                  {log.status === "SENT" ? (
-                    <Badge
-                      variant="outline"
-                      className="bg-green-50 text-green-700 border-green-200 gap-1"
-                    >
-                      <CheckCircle2 className="h-3 w-3" /> Sent
-                    </Badge>
-                  ) : (
-                    <Badge variant="destructive" className="gap-1">
-                      <XCircle className="h-3 w-3" /> Failed
-                    </Badge>
-                  )}
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={4} className="h-24 text-center">
+                  <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
                 </TableCell>
-                {/* ... Rest of the cells remain the same ... */}
               </TableRow>
-            ))}
+            ) : logs.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={4}
+                  className="h-24 text-center text-muted-foreground"
+                >
+                  No notifications sent yet.
+                </TableCell>
+              </TableRow>
+            ) : (
+              logs.map((log) => (
+                <TableRow key={log.id}>
+                  <TableCell>
+                    {log.status === "SENT" ? (
+                      <Badge
+                        variant="outline"
+                        className="bg-green-50 text-green-700 border-green-200 gap-1"
+                      >
+                        <CheckCircle2 className="h-3 w-3" /> Sent
+                      </Badge>
+                    ) : (
+                      <Badge variant="destructive" className="gap-1">
+                        <XCircle className="h-3 w-3" /> Failed
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col max-w-[300px]">
+                      <span className="font-medium text-sm">{log.title}</span>
+                      <span
+                        className="text-xs text-muted-foreground truncate"
+                        title={log.body}
+                      >
+                        {log.body}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant="secondary"
+                        className="uppercase text-[10px]"
+                      >
+                        {log.targetType}
+                      </Badge>
+                      <span
+                        className="font-mono text-xs text-muted-foreground truncate max-w-[150px]"
+                        title={log.target}
+                      >
+                        {log.target}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right text-muted-foreground text-sm">
+                    {format(new Date(log.sentAt), "MMM d, h:mm a")}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </CardContent>

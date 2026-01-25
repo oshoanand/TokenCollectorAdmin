@@ -211,6 +211,7 @@ import {
   Command,
   Settings,
   User,
+  Headset,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -235,7 +236,8 @@ const menuGroups = [
   {
     label: "Communication",
     items: [
-      { href: "/notifications", icon: BellRing, label: "Push Notifications" }, // New FCM Menu
+      { href: "/notifications", icon: BellRing, label: "Push Notifications" },
+      { href: "/support", icon: Headset, label: "Support Queries" },
     ],
   },
 ];
@@ -308,7 +310,11 @@ export function SidebarNav() {
                 >
                   <Avatar className="h-8 w-8 rounded-lg">
                     <AvatarImage
-                      src={getImage("avatar3")}
+                      src={
+                        session?.user.image
+                          ? session?.user.image
+                          : "/icons/icon-192x192.png"
+                      }
                       alt={session?.user.name || "User"}
                     />
                     <AvatarFallback className="rounded-lg">
