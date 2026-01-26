@@ -41,6 +41,7 @@
 // }
 
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import NextAuthProvider from "@/components/providers/next-auth-session-provider";
@@ -82,7 +83,7 @@ export default function RootLayout({
             <PushNotificationManager />
 
             {/* Main Content */}
-            {children}
+            <Suspense>{children}</Suspense>
 
             {/* 3. TOASTER: The UI component that shows the popup */}
             <Toaster />
