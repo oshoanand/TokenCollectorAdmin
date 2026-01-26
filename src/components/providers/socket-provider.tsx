@@ -28,12 +28,12 @@ export default function SocketProvider() {
       // Trigger Toast with Action
       toast({
         title: "New Token Generated 🎟️",
-        description: `Code: ${data.tokenCode} | Order #${data.orderNumber}`,
-        variant: "default", // You can use "success" if defined in your wrapper
+        description: `Token: ${data.tokenCode} | Order #${data.orderNumber}`,
+        variant: "success", // You can use "success" if defined in your wrapper
         duration: 10000,
         action: {
           label: "View",
-          onClick: () => router.push("/dashboard/orders"), // Smooth navigation
+          onClick: () => router.push("/tokens"), // Smooth navigation
         },
       });
     });

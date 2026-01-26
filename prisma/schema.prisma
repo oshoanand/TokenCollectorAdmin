@@ -8,6 +8,23 @@ datasource db {
   provider = "postgresql"
 }
 
+enum SupportStatus {
+  PENDING
+  IN_PROGRESS
+  RESOLVED
+  REJECTED
+}
+
+enum TargetType {
+  topic
+  token
+}
+
+enum Status {
+  SENT
+  FAILED
+}
+
 model Account {
   id                String  @id @default(cuid())
   userId            String
@@ -49,46 +66,6 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-model Product {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
-  slug        String
-  description String?
-  category    String?
-  image       String?
-  inStock     Int?     @default(0)
-  salePrice   Int?     @default(0)
-  price       Int?     @default(0)
-  discount    Int?     @default(0)
-  status      String   @default("Active")
-  coinValue   Int
-  createdAt   DateTime @default(now())
-}
-
-model Redeem {
-  id           Int       @id @default(autoincrement())
-  name         String
-  mobile       String
-  email        String
-  product      String
-  productValue String
-  redeemCode   String    @unique
-  redeemStatus String    @default("Created")
-  createdAt    DateTime  @default(now())
-  receivedAt   DateTime?
-}
-
-model Coin {
-  id          Int      @id @default(autoincrement())
-  name        String
-  mobile      String
-  email       String?
-  orderNumber String?
-  earnedCoin  Int      @default(0)
-  spentCoin   Int      @default(0)
-  createdAt   DateTime @default(now())
-}
-
 model User {
   id                 String              @id @default(cuid())
   name               String
@@ -107,8 +84,25 @@ model User {
   accounts           Account[]
   sessions           Session[]
   verificationTokens VerificationToken[]
+  supports           Support[]
+  tokens             Token[]
   jobPostedBy        Job[]               @relation("JobPostedBy")
   jobFinishedBy      Job[]               @relation("JobFinishedBy")
+}
+
+model Support {
+  id         String        @id @default(uuid())
+  mobile     String
+  queryType  String
+  message    String
+  photo      String? // The proof image URL
+  status     SupportStatus @default(PENDING)
+  adminReply String?
+  resolvedAt DateTime?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  postedBy   User          @relation(fields: [postedById], references: [mobile])
+  postedById String
 }
 
 model Job {
@@ -139,6 +133,8 @@ model Token {
   tokenStatus  String    @default("REQUESTED")
   createdAt    DateTime  @default(now())
   receivedAt   DateTime?
+  postedBy     User?     @relation(fields: [postedById], references: [mobile])
+  postedById   String?
 
   @@index([createdAt])
 }
@@ -164,4 +160,32 @@ model Order {
   paymentStatus     String?
   orderDate         DateTime  @default(now())
   orderDispatchDate DateTime?
+}
+
+model Subscription {
+  id       String @id @default(uuid())
+  endpoint String @unique // The unique URL for the user's browser
+  p256dh   String // Public key for encryption
+  auth     String // Auth secret
+
+  // Optional: Link to a User/Admin if you have authentication
+  // userId    String? 
+  // user      User?   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model NotificationLog {
+  id           String     @id @default(uuid())
+  title        String
+  body         String
+  targetType   TargetType
+  target       String
+  status       Status     @default(SENT)
+  messageId    String?
+  sentAt       DateTime   @default(now())
+  errorDetails String?
+
+  @@index([sentAt]) // Optimize sorting by date
 }
