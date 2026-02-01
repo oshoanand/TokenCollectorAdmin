@@ -26,12 +26,13 @@ export const authOptions: NextAuthOptions = {
           const user = await prisma.user.findUnique({
             where: {
               mobile: credentials.mobile,
+              userRole: "ADMINISTRATOR",
             },
           });
 
           // 3. Verify user exists
           if (!user || !user.password) {
-            throw new Error("Password does not exists !");
+            throw new Error("user or password is incorrect !");
           }
 
           // 4. Verify password

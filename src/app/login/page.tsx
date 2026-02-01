@@ -75,7 +75,7 @@ export default function LoginPage() {
         mobile: mobileNumber,
         password,
         redirect: false,
-        callbackUrl,
+        callbackUrl: "/dashboard",
       });
 
       if (res?.error) {
@@ -92,7 +92,7 @@ export default function LoginPage() {
 
   const handleMobileChange = (
     e: React.ChangeEvent<HTMLInputElement>,
-    fieldOnChange: (...event: any[]) => void
+    fieldOnChange: (...event: any[]) => void,
   ) => {
     let value = e.target.value;
     // Ensure it starts with +7 and only contains digits after that

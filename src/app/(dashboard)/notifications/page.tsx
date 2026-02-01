@@ -20,14 +20,37 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Send, Smartphone, Loader2, BellRing, History } from "lucide-react";
+import {
+  Send,
+  Smartphone,
+  Loader2,
+  BellRing,
+  History,
+  Lock,
+  Unlock,
+} from "lucide-react";
 import { toast } from "sonner"; // Assuming you use Sonner or similar toast
-import { NotificationHistory } from "@/components/notification-history";
+// import { NotificationHistory } from "@/components/notification-history";
 import Link from "next/link";
+
+// 1. CONFIGURATION MAPPING
+const TOPIC_CONFIG = {
+  collector:
+    process.env.NEXT_PUBLIC_COLLECTOR_FCM_TOPIC ||
+    "garbagecollector_collector_topic",
+  visitor:
+    process.env.NEXT_PUBLIC_VISITOR_FCM_TOPIC ||
+    "garbagecollector_visitor_topic",
+  token_group:
+    process.env.NEXT_PUBLIC_TOKEN_FCM_TOPIC || "token_generator_topic",
+  user: "", // User requires manual input
+};
+
+type SelectionType = "collector" | "visitor" | "token_group" | "user";
 
 export default function NotificationsPage() {
   const [isLoading, setIsLoading] = useState(false);
-  const [targetType, setTargetType] = useState<"topic" | "token">("topic");
+  const [targetType, setTargetType] = useState<SelectionType>("collector");
 
   // Form State
   const [formData, setFormData] = useState({
@@ -35,6 +58,18 @@ export default function NotificationsPage() {
     title: "",
     body: "",
   });
+
+  const handleTypeChange = (value: SelectionType) => {
+    setTargetType(value);
+
+    if (value === "user") {
+      // If User, clear target for manual entry
+      setFormData((prev) => ({ ...prev, target: "" }));
+    } else {
+      // If Group, auto-populate from Environment Variables
+      setFormData((prev) => ({ ...prev, target: TOPIC_CONFIG[value] }));
+    }
+  };
 
   const handleSend = async () => {
     if (!formData.title || !formData.body || !formData.target) {
@@ -45,14 +80,16 @@ export default function NotificationsPage() {
     setIsLoading(true);
 
     try {
-      // Replace with your actual Node.js API endpoint
+      // 4. Determine generic API type based on specific UI selection
+      // const apiType = targetType === "user" ? "token" : "topic";
+
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_BASE_URL}/api/notifications/send`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            type: targetType, // 'topic' or 'token'
+            type: "topic", // 'topic' or 'token'
             target: formData.target, // topic name or user fcm token
             title: formData.title,
             body: formData.body,
@@ -62,7 +99,11 @@ export default function NotificationsPage() {
 
       if (response.ok) {
         toast.success("Notification sent successfully!");
-        setFormData({ target: "", title: "", body: "" }); // Reset form
+        // Reset form but keep the current target logic intact
+        setFormData((prev) => ({ ...prev, title: "", body: "" }));
+        if (targetType === "user") {
+          setFormData((prev) => ({ ...prev, target: "" }));
+        }
       } else {
         toast.error("Failed to send notification");
       }
@@ -105,32 +146,53 @@ export default function NotificationsPage() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="type">Target Type</Label>
+                <Label htmlFor="type">Target Audience</Label>
                 <Select
                   value={targetType}
-                  onValueChange={(val: any) => setTargetType(val)}
+                  onValueChange={(val: SelectionType) => handleTypeChange(val)}
                 >
                   <SelectTrigger id="type">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="topic">Topic (Broadcast)</SelectItem>
-                    <SelectItem value="token">Single User (Token)</SelectItem>
+                    <SelectItem value="collector">Collector Group</SelectItem>
+                    <SelectItem value="visitor">Visitor Group</SelectItem>
+                    <SelectItem value="token_group">Token Group</SelectItem>
+                    <SelectItem value="user">Specific User (Token)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="target">
-                  {targetType === "topic" ? "Topic Name" : "User FCM Token"}
-                </Label>
+                <div className="flex justify-between">
+                  <Label htmlFor="target">
+                    {targetType === "user"
+                      ? "User FCM Token"
+                      : "Topic Name (Auto-Filled)"}
+                  </Label>
+                  {/* Visual indicator for Read Only vs Editable */}
+                  {targetType !== "user" ? (
+                    <Lock className="w-3 h-3 text-gray-400" />
+                  ) : (
+                    <Unlock className="w-3 h-3 text-gray-400" />
+                  )}
+                </div>
                 <Input
                   id="target"
                   placeholder={
-                    targetType === "topic"
-                      ? "e.g., all_users"
-                      : "e.g., fcm_token_..."
+                    targetType === "user"
+                      ? "Paste FCM Token here..."
+                      : "Topic name from .env"
                   }
                   value={formData.target}
+                  // Disable editing if it's a group topic to prevent errors
+                  readOnly={targetType !== "user"}
+                  disabled={targetType !== "user"}
+                  className={
+                    targetType !== "user"
+                      ? "bg-gray-100 text-gray-500 cursor-not-allowed"
+                      : ""
+                  }
                   onChange={(e) =>
                     setFormData({ ...formData, target: e.target.value })
                   }
