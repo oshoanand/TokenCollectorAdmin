@@ -10,13 +10,18 @@ import React, {
 import { io, Socket } from "socket.io-client";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-import { TokenPayload, NotificationContextType } from "@/types/notification";
+// Import the new types
+import {
+  NotificationContextType,
+  NotificationItem,
+  TokenPayload,
+  JobPayload,
+} from "@/types/notification";
 
 const NotificationContext = createContext<NotificationContextType | undefined>(
   undefined,
 );
 
-// Use the environment variable consistent with your old provider
 const SOCKET_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8800";
 
@@ -28,15 +33,24 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
   children,
 }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
-  const [notifications, setNotifications] = useState<TokenPayload[]>([]);
+  // Update state type to accept both Jobs and Tokens
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
 
-  // Initialize hooks
   const { toast } = useToast();
   const router = useRouter();
 
+  // Helper function to play sound
+  const playNotificationSound = () => {
+    try {
+      const audio = new Audio("/sounds/notification.mp3");
+      audio.play().catch((e) => console.log("Audio play blocked", e));
+    } catch (error) {
+      console.error("Audio error:", error);
+    }
+  };
+
   useEffect(() => {
-    // 1. Initialize Socket connection
     const newSocket: Socket = io(SOCKET_URL, {
       transports: ["websocket"],
     });
@@ -44,33 +58,25 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
     setSocket(newSocket);
 
     newSocket.on("connect", () => {
-      console.log(
-        "✅ Admin Panel: Connected to Live Server via NotificationContext",
-      );
+      console.log("✅ Admin Panel: Connected to Live Server");
     });
 
-    // 2. Listen for 'new_token' (Handles Bell + Toast + Sound)
+    // --- 1. LISTENER: NEW TOKEN ---
     newSocket.on("new_token", (payload: TokenPayload) => {
-      console.log("🔔 New Token Received:", payload);
+      console.log("🔔 New Token:", payload);
 
-      // --- A. Bell State Logic ---
-      setNotifications((prev) => [payload, ...prev]);
+      // Ensure type is set
+      const item: TokenPayload = { ...payload, type: "TOKEN" };
+
+      setNotifications((prev) => [item, ...prev]);
       setUnreadCount((prev) => prev + 1);
+      playNotificationSound();
 
-      // --- B. Sound Logic ---
-      try {
-        const audio = new Audio("/sounds/notification.mp3");
-        audio.play().catch((e) => console.log("Audio play blocked", e));
-      } catch (error) {
-        console.error("Audio error:", error);
-      }
-
-      // --- C. Toast Logic ---
       toast({
         title: "New Token Generated 🎟️",
-        description: `Token: ${payload.tokenCode} | Order #${payload.orderNumber}`,
-        variant: "success", // Ensure 'success' variant exists in your toast component, or use 'default'
-        duration: 10000,
+        description: `Token: ${payload.tokenCode}`,
+        variant: "success",
+        duration: 8000,
         action: {
           label: "View",
           onClick: () => router.push("/tokens"),
@@ -78,10 +84,33 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
       });
     });
 
+    // --- 2. LISTENER: NEW JOB (Implemented) ---
+    newSocket.on("new_job", (payload: JobPayload) => {
+      console.log("🚛 New Job:", payload);
+
+      // Ensure type is set
+      const item: JobPayload = { ...payload, type: "JOB" };
+
+      setNotifications((prev) => [item, ...prev]);
+      setUnreadCount((prev) => prev + 1);
+      playNotificationSound();
+
+      toast({
+        title: "New Job Posted 🚛",
+        description: `${payload.location} | ${payload.cost}₽`,
+        variant: "default", // You can define a specific variant style in your toast component
+        duration: 8000,
+        action: {
+          label: "Jobs",
+          onClick: () => router.push("/jobs"),
+        },
+      });
+    });
+
     return () => {
       newSocket.disconnect();
     };
-  }, [toast, router]); // Dependencies ensure fresh hooks are used
+  }, [toast, router]);
 
   const markAllAsRead = () => {
     setUnreadCount(0);
