@@ -43,7 +43,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
   // Helper function to play sound
   const playNotificationSound = () => {
     try {
-      const audio = new Audio("/sounds/notification.mp3");
+      const audio = new Audio("/sounds/notification.wav");
       audio.play().catch((e) => console.log("Audio play blocked", e));
     } catch (error) {
       console.error("Audio error:", error);
