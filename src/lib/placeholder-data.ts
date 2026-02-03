@@ -79,22 +79,3 @@ export const overviewData = [
   { month: "May", revenue: 5800, profit: 3400, users: 2350 },
   { month: "June", revenue: 5500, profit: 3600, users: 2500 },
 ];
-
-export type Order = {
-  id: string;
-  mobileNumber: string;
-  orderNumber: string;
-  orderCode: string;
-  tokenCode: string;
-  quantity: number;
-  createdAt: string;
-  receivedAt: string | null;
-  tokenStatus: "REQUESTED" | "ISSUED";
-  postedBy?: {
-    name: string | null;
-  } | null;
-};
-
-export type Result = {
-  message: string;
-};
