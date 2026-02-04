@@ -39,7 +39,7 @@ const getTokens = async (
   status: StatusFilter,
   page: number,
   limit: number,
-  search: string, // <--- New Param
+  search: string,
 ): Promise<TokenResponse> => {
   // Append search param
   const queryString = `?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}`;
