@@ -12,8 +12,9 @@ export interface Job {
   status: string;
   cost: string;
   jobPhoto: string;
+  jobPhotoDone: string;
   createdAt: string;
-  // --- ADD THIS ---
+  finishedAt: string;
   postedBy: {
     name: string | null;
     mobile: string;

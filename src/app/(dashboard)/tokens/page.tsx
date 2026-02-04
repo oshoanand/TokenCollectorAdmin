@@ -305,14 +305,22 @@ export default function TokensPage() {
                             Issue
                           </Button>
                         ) : (
-                          <span className="text-xs text-muted-foreground flex flex-col items-end">
-                            <span>Issued</span>
+                          <div className="text-xs text-muted-foreground flex flex-col items-end">
+                            <p>Issued</p>
                             {token.receivedAt && (
-                              <span className="text-[10px]">
-                                {format(new Date(token.receivedAt), "p")}
-                              </span>
+                              <>
+                                <span>
+                                  {format(
+                                    new Date(token.receivedAt),
+                                    "MMM d, yyyy",
+                                  )}
+                                </span>
+                                <span className="text-xs">
+                                  {format(new Date(token.receivedAt), "h:mm a")}
+                                </span>
+                              </>
                             )}
-                          </span>
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>
