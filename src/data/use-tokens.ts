@@ -47,7 +47,7 @@ const getTokens = async (
   const endpoint =
     status === "ALL"
       ? `/api/token/all-tokens${queryString}`
-      : `/api/token/all-tokens/${status}${queryString}`;
+      : `/api/token/all/${status}${queryString}`;
 
   const response = await apiRequest({
     method: "get",
