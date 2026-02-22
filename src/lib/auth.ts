@@ -45,7 +45,7 @@ export const authOptions: NextAuthOptions = {
             throw new Error("Password is wrong !");
           }
 
-          const secret = process.env.SECRET!;
+          const secret = process.env.NEXTAUTH_SECRET!;
           const token = jwt.sign(
             {
               id: user.id,
@@ -64,7 +64,7 @@ export const authOptions: NextAuthOptions = {
             name: user.name,
             email: user.email,
             mobile: user.mobile,
-            userType: user.userRole,
+            image: user.image,
             role: user.userRole,
             accessToken: token,
           };
@@ -86,19 +86,24 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.image = user.image ? user.image.toString() : null;
+        token.image = user.image ? user.image.toString() : "";
         token.name = user.name ? user.name.toString() : "";
         token.email = user.email ? user.email.toString() : "";
         token.accessToken = user.accessToken;
+        token.role = user.role ? user.role.toString() : "";
       }
       return token;
     },
     async session({ session, token }) {
-      session.user.id = token.id;
-      session.user.image = token.image;
-      session.user.name = token.name;
-      session.user.email = token.email;
-      session.accessToken = token.accessToken;
+      if (session.user) {
+        // Using `token.sub || token.id` ensures the ID is NEVER lost.
+        (session.user as any).id = (token.sub || token.id) as string;
+        (session.user as any).image = token.image as string;
+        (session.user as any).name = token.name as string;
+        (session.user as any).email = token.email as string;
+        (session.user as any).role = token.role as string;
+        (session.user as any).accessToken = token.accessToken as string;
+      }
       return session;
     },
   },

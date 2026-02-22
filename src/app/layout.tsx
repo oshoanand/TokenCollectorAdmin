@@ -4,9 +4,8 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import NextAuthProvider from "@/components/providers/next-auth-session-provider";
 import ReactQueryProvider from "@/utils/query-client-provider";
-// import SocketProvider from "@/components/providers/socket-provider";
 import PushNotificationManager from "@/components/providers/push-notification-manager";
-import { NotificationProvider } from "@/context/NotificationContext";
+import { NotificationProvider } from "@/components/providers/notification-provider";
 
 export const metadata: Metadata = {
   title: "Token Admin",
@@ -35,19 +34,14 @@ export default function RootLayout({
       <body className="font-body antialiased">
         <NextAuthProvider>
           <ReactQueryProvider>
-            {/* 1. WRAP APP WITH NOTIFICATION PROVIDER */}
-            {/* This ensures the Bell state is available on every page */}
+            {/* NotificationProvider acts as both the Notifier AND the Socket Provider */}
             <NotificationProvider>
-              {/* 2. SOCKET: Listens for live events when tab is OPEN */}
-              {/* <SocketProvider /> */}
-
-              {/* 3. PUSH MANAGER: Handles service worker for when tab is CLOSED */}
               <PushNotificationManager />
 
-              {/* Main Content */}
+              {/* Main App Content */}
               <Suspense>{children}</Suspense>
 
-              {/* 4. TOASTER: The UI component that shows the popup */}
+              {/* Toaster placed inside provider so hooks can trigger it */}
               <Toaster />
             </NotificationProvider>
           </ReactQueryProvider>

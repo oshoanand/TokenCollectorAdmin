@@ -37,8 +37,19 @@ export interface JobPayload {
   createdAt: string | Date;
 }
 
-// Union Type for State
-export type NotificationItem = TokenPayload | JobPayload;
+// Add this new payload interface
+export interface ChatPayload {
+  id: number;
+  chatSessionId: number;
+  senderId: number;
+  senderType: "USER" | "ADMIN";
+  text: string;
+  createdAt: string;
+  type?: "CHAT";
+}
+
+// Ensure NotificationItem can also be a ChatPayload
+export type NotificationItem = TokenPayload | JobPayload | ChatPayload;
 
 export interface NotificationContextType {
   notifications: NotificationItem[];

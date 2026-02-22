@@ -200,7 +200,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSession, signOut } from "next-auth/react";
+// import { useSession, signOut } from "next-auth/react";
 import {
   SidebarHeader,
   SidebarContent,
@@ -221,18 +221,18 @@ import {
   Settings,
   User,
   Headset,
-  Briefcase, // <--- 1. IMPORT THIS ICON
+  Briefcase,
 } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
-import { PlaceHolderImages } from "@/lib/placeholder-images";
+// import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+// import {
+//   DropdownMenu,
+//   DropdownMenuContent,
+//   DropdownMenuItem,
+//   DropdownMenuLabel,
+//   DropdownMenuSeparator,
+//   DropdownMenuTrigger,
+// } from "./ui/dropdown-menu";
+// import { PlaceHolderImages } from "@/lib/placeholder-images";
 
 // Organize menu items into groups for better UX
 const menuGroups = [
@@ -254,12 +254,12 @@ const menuGroups = [
 ];
 
 export function SidebarNav() {
-  const { data: session } = useSession();
+  // const { data: session } = useSession();
   const pathname = usePathname();
 
-  const handleLogout = () => {
-    signOut({ callbackUrl: "/login" });
-  };
+  // const handleLogout = () => {
+  //   signOut({ callbackUrl: "/login" });
+  // };
 
   return (
     <>
@@ -303,7 +303,7 @@ export function SidebarNav() {
           </SidebarGroup>
         ))}
       </SidebarContent>
-
+      {/* 
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
@@ -379,7 +379,7 @@ export function SidebarNav() {
             </DropdownMenu>
           </SidebarMenuItem>
         </SidebarMenu>
-      </SidebarFooter>
+      </SidebarFooter> */}
     </>
   );
 }

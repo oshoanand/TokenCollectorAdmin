@@ -8,23 +8,26 @@ import { getSession } from "next-auth/react";
 
 const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
+  // REMOVED: headers: { "Content-Type": "application/json" }
+  // Axios automatically sets Content-Type to application/json for objects,
+  // and lets the browser set multipart/form-data with boundary for FormData.
 });
 
 apiClient.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
     if (typeof window !== "undefined") {
       const session = await getSession();
-      const token = session?.accessToken;
+      const token = session?.user?.accessToken;
 
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
     }
     return config;
-  }
+  },
+  (error) => {
+    return Promise.reject(error);
+  },
 );
 
 export class ApiError<T = unknown> extends Error {
@@ -32,36 +35,40 @@ export class ApiError<T = unknown> extends Error {
     public message: string,
     public status?: number,
     public data?: T,
-    public validationErrors?: Record<string, string>
+    public validationErrors?: Record<string, string>,
   ) {
     super(message);
+    this.name = "ApiError"; // Useful for debugging
   }
 }
 
 export const apiRequest = async <T, D = unknown>(
-  config: AxiosRequestConfig<D>
+  config: AxiosRequestConfig<D>,
 ): Promise<T> => {
   try {
     const response = await apiClient(config);
-    // console.log(response.data);
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
+      // Extract validation errors if they exist in your specific backend format
       const validationErrors = error.response?.data?.errors?.reduce(
         (
           acc: Record<string, string>,
-          err: { path: string; message: string }
+          err: { path: string; message: string },
         ) => {
-          acc[err.path] = err.message;
+          if (err.path && err.message) {
+            acc[err.path] = err.message;
+          }
           return acc;
         },
-        {}
+        {},
       );
+
       throw new ApiError(
-        error.response?.data?.message || error.message,
+        error.response?.data?.message || error.message || "An error occurred",
         error.response?.status,
         error.response?.data,
-        validationErrors
+        validationErrors,
       );
     }
     throw new ApiError("Unknown error occurred");

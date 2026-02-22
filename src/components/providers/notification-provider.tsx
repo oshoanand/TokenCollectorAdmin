@@ -10,12 +10,14 @@ import React, {
 import { io, Socket } from "socket.io-client";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/hooks/use-toast";
-// Import the new types
+
+// Import your types
 import {
   NotificationContextType,
   NotificationItem,
   TokenPayload,
   JobPayload,
+  ChatPayload,
 } from "@/types/notification";
 
 const NotificationContext = createContext<NotificationContextType | undefined>(
@@ -33,14 +35,12 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
   children,
 }) => {
   const [socket, setSocket] = useState<Socket | null>(null);
-  // Update state type to accept both Jobs and Tokens
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
 
   const { toast } = useToast();
   const router = useRouter();
 
-  // Helper function to play sound
   const playNotificationSound = () => {
     try {
       const audio = new Audio("/sounds/notification.wav");
@@ -52,7 +52,8 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
 
   useEffect(() => {
     const newSocket: Socket = io(SOCKET_URL, {
-      transports: ["websocket"],
+      transports: ["websocket", "polling"], // Added polling as a fallback
+      withCredentials: true,
     });
 
     setSocket(newSocket);
@@ -64,8 +65,6 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
     // --- 1. LISTENER: NEW TOKEN ---
     newSocket.on("new_token", (payload: TokenPayload) => {
       console.log("🔔 New Token:", payload);
-
-      // Ensure type is set
       const item: TokenPayload = { ...payload, type: "TOKEN" };
 
       setNotifications((prev) => [item, ...prev]);
@@ -84,11 +83,9 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
       });
     });
 
-    // --- 2. LISTENER: NEW JOB (Implemented) ---
+    // --- 2. LISTENER: NEW JOB ---
     newSocket.on("new_job", (payload: JobPayload) => {
       console.log("🚛 New Job:", payload);
-
-      // Ensure type is set
       const item: JobPayload = { ...payload, type: "JOB" };
 
       setNotifications((prev) => [item, ...prev]);
@@ -98,13 +95,42 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
       toast({
         title: "New Job Posted 🚛",
         description: `${payload.location} | ${payload.cost}₽`,
-        variant: "default", // You can define a specific variant style in your toast component
+        variant: "default",
         duration: 8000,
         action: {
           label: "Jobs",
           onClick: () => router.push("/jobs"),
         },
       });
+    });
+
+    // --- 3. LISTENER: LIVE CHAT MESSAGES ---
+    newSocket.on("receive_message", (payload: ChatPayload) => {
+      // Only notify the admin if the sender is a USER
+      if (payload.senderType === "USER") {
+        console.log("💬 New Chat Message:", payload);
+        const item: ChatPayload = { ...payload, type: "CHAT" };
+
+        setNotifications((prev) => [item, ...prev]);
+        setUnreadCount((prev) => prev + 1);
+        playNotificationSound();
+
+        // Truncate long messages for the toast
+        const previewText =
+          payload.text.length > 40
+            ? payload.text.substring(0, 40) + "..."
+            : payload.text;
+
+        toast({
+          title: "New Support Message 💬",
+          description: previewText,
+          duration: 8000,
+          action: {
+            label: "Reply",
+            onClick: () => router.push("/chat"), // Adjust this route to match your chat page URL
+          },
+        });
+      }
     });
 
     return () => {
@@ -122,7 +148,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
         notifications,
         unreadCount,
         markAllAsRead,
-        socket,
+        socket, // Exposing the socket so your Chat page can use it!
       }}
     >
       {children}
