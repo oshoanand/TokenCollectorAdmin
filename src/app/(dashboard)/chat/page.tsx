@@ -1,392 +1,243 @@
 "use client";
 
-import { useEffect, useRef, useState, Suspense } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState, useMemo, Suspense } from "react";
 import { useSession } from "next-auth/react";
-import { useNotification } from "@/components/providers/notification-provider";
-import {
-  useActiveSessions,
-  useChatHistory,
-  useResolveChat,
-} from "@/hooks/use-chat";
-import { useToast } from "@/hooks/use-toast";
-import { ChatMessage } from "@/types/chat";
-import {
-  Loader2,
-  Send,
-  UserCircle,
-  MessageSquare,
-  Check,
-  CheckCheck,
-  Volume2,
-} from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import axios from "axios";
+import { Search, Loader2, MessageSquare, UserCircle } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { ru } from "date-fns/locale";
+import { clsx } from "clsx";
 
-function ChatInterface() {
+import { useChatStore } from "@/store/useChatStore";
+import AdminChatDetail from "@/components/AdminChatDetail";
+
+// Next.js requires components using useSearchParams to be wrapped in a Suspense boundary
+export default function AdminChatPageWrapper() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-screen items-center justify-center">
+          <Loader2 className="animate-spin text-green-600 w-10 h-10" />
+        </div>
+      }
+    >
+      <AdminChatPage />
+    </Suspense>
+  );
+}
+
+function AdminChatPage() {
+  const { data: session } = useSession();
+  const adminId = session?.user?.id || "";
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const targetUserId = searchParams.get("userId");
+  const queryUserId = searchParams.get("userId");
 
-  const queryClient = useQueryClient();
-  const { socket } = useNotification();
-
-  const { data: session, status: sessionStatus } = useSession();
-  const adminId = session?.user ? String((session.user as any).id) : null;
-
-  const [activeUserId, setActiveUserId] = useState<string | null>(
-    targetUserId || null,
+  // Global State
+  const onlineUsers = useChatStore((state) => state.onlineUsers);
+  const lastSeenMap = useChatStore((state) => state.lastSeenMap);
+  const setOnlineStatusBulk = useChatStore(
+    (state) => state.setOnlineStatusBulk,
   );
-  const [inputText, setInputText] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
+  const refreshTrigger = useChatStore((state) => state.refreshTrigger);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const notificationSound = useRef<HTMLAudioElement | null>(null);
+  // Local State
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedPartner, setSelectedPartner] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
-  const { data: activeSessions = [], isLoading: isLoadingSessions } =
-    useActiveSessions(adminId);
-  const { data: messages = [], isLoading: isLoadingHistory } = useChatHistory(
-    adminId,
-    activeUserId,
-  );
-  const { mutate: resolveTicket, isPending: isResolving } =
-    useResolveChat(adminId);
-
-  const currentActiveSession = activeSessions.find(
-    (s: any) => s.userId === activeUserId,
-  );
-
+  // Fetch Chat List
   useEffect(() => {
-    notificationSound.current = new Audio("/sounds/notification.wav");
-  }, []);
-
-  useEffect(() => {
-    if (!socket || !adminId) return;
-
-    const joinPersonalRoom = () => {
-      socket.emit("user_connected", adminId);
-    };
-
-    if (socket.connected) joinPersonalRoom();
-    socket.on("connect", joinPersonalRoom);
-
-    // --- 1. HANDLE NEW MESSAGES ---
-    const handleNewMessage = (
-      newMessage: ChatMessage & { tempId?: string },
-    ) => {
-      // Refresh the sidebar sessions to update unread counts/last message
-      queryClient.invalidateQueries({ queryKey: ["activeSessions", adminId] });
-
-      const isFromOthers = String(newMessage.senderId) !== adminId;
-
-      // Play sound if message is for us and we aren't looking at that chat
-      if (
-        isFromOthers &&
-        (newMessage.senderId !== activeUserId || document.hidden)
-      ) {
-        notificationSound.current?.play().catch(() => {});
-      }
-
-      // If this message belongs to the current open chat
-      if (
-        activeUserId &&
-        (newMessage.senderId === activeUserId ||
-          String(newMessage.senderId) === adminId)
-      ) {
-        queryClient.setQueryData(
-          ["chatHistory", adminId, activeUserId],
-          (oldMessages: ChatMessage[] | undefined) => {
-            if (!oldMessages) return [newMessage];
-            // Remove optimistic message if tempId matches
-            const filtered = newMessage.tempId
-              ? oldMessages.filter((m) => m.id !== newMessage.tempId)
-              : oldMessages;
-
-            if (filtered.some((m) => m.id === newMessage.id)) return filtered;
-            return [...filtered, newMessage];
-          },
+    if (!adminId) return;
+    const fetchSessions = async () => {
+      try {
+        const API_URL =
+          process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8800";
+        const { data } = await axios.get(
+          `${API_URL}/api/chat/sessions?userId=${adminId}`,
         );
 
-        // SYNC: If we are looking at the chat, mark this new message as read immediately
-        if (newMessage.senderId === activeUserId) {
-          socket.emit("mark_messages_read", {
-            readerId: adminId,
-            senderId: activeUserId,
-          });
-        }
+        const currentlyOnline: string[] = [];
+        const lastSeenData: Record<string, string> = {};
+
+        data.forEach((s: any) => {
+          if (s.isOnline) currentlyOnline.push(s.userId);
+          else if (s.lastSeen) lastSeenData[s.userId] = s.lastSeen;
+        });
+
+        setOnlineStatusBulk(currentlyOnline, lastSeenData);
+        setSessions(data);
+      } catch (error) {
+        console.error("Failed to fetch sessions", error);
+      } finally {
+        setLoading(false);
       }
     };
+    fetchSessions();
+  }, [adminId, refreshTrigger, setOnlineStatusBulk]);
 
-    // --- 2. HANDLE READ RECEIPTS (Syncing Ticks) ---
-    const handleMessagesRead = ({
-      readerId,
-      readAt,
-    }: {
-      readerId: string;
-      readAt: string;
-    }) => {
-      if (activeUserId && readerId === activeUserId) {
-        queryClient.setQueryData(
-          ["chatHistory", adminId, activeUserId],
-          (old: ChatMessage[] | undefined) => {
-            return old?.map((msg) =>
-              msg.senderId === adminId ? { ...msg, isRead: true, readAt } : msg,
-            );
-          },
-        );
-      }
-    };
-
-    // --- 3. HANDLE STATUS & TYPING ---
-    const handleStatusChange = ({
-      userId,
-      isOnline,
-    }: {
-      userId: string;
-      isOnline: boolean;
-    }) => {
-      queryClient.setQueryData(["activeSessions", adminId], (old: any) => {
-        if (!old) return old;
-        return old.map((s: any) =>
-          s.userId === userId ? { ...s, user: { ...s.user, isOnline } } : s,
-        );
-      });
-    };
-
-    const handleTyping = ({ userId }: { userId: string }) => {
-      if (activeUserId && userId === activeUserId) setIsTyping(true);
-    };
-
-    const handleStopTyping = ({ userId }: { userId: string }) => {
-      if (activeUserId && userId === activeUserId) setIsTyping(false);
-    };
-
-    socket.on("receive_message", handleNewMessage);
-    socket.on("messages_read_by_recipient", handleMessagesRead); // Matches Node.js emit
-    socket.on("user_status_changed", handleStatusChange);
-    socket.on("user_typing", handleTyping);
-    socket.on("user_stopped_typing", handleStopTyping);
-
-    return () => {
-      socket.off("connect", joinPersonalRoom);
-      socket.off("receive_message", handleNewMessage);
-      socket.off("messages_read_by_recipient", handleMessagesRead);
-      socket.off("user_status_changed", handleStatusChange);
-      socket.off("user_typing", handleTyping);
-      socket.off("user_stopped_typing", handleStopTyping);
-    };
-  }, [socket, adminId, activeUserId, queryClient]);
-
-  // Trigger Read Receipt when switching users
+  // --- NEW: Auto-Select Partner from URL ---
   useEffect(() => {
-    if (socket && adminId && activeUserId) {
-      socket.emit("mark_messages_read", {
-        readerId: adminId,
-        senderId: activeUserId,
-      });
+    if (queryUserId && !loading) {
+      // Check if we already have an active session with this user
+      const existingSession = sessions.find((s) => s.userId === queryUserId);
+
+      if (existingSession) {
+        setSelectedPartner({
+          id: existingSession.userId,
+          name: existingSession.user.name,
+        });
+      } else {
+        // If no session exists, it's a new chat. We set a default name.
+        // Optional: You could fetch the user's name from your backend here if you want it to be perfect.
+        setSelectedPartner({ id: queryUserId, name: "Новый чат (Клиент)" });
+      }
     }
-  }, [activeUserId, socket, adminId]);
+  }, [queryUserId, sessions, loading]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputText.trim() || !activeUserId || !socket || !adminId) return;
-
-    const tempId = `temp_${Date.now()}`;
-    const optimisticMessage = {
-      id: tempId,
-      senderId: adminId,
-      text: inputText,
-      createdAt: new Date().toISOString(),
-      isRead: false,
-    } as ChatMessage;
-
-    queryClient.setQueryData(
-      ["chatHistory", adminId, activeUserId],
-      (old: ChatMessage[] | undefined) =>
-        old ? [...old, optimisticMessage] : [optimisticMessage],
+  const filteredSessions = useMemo(() => {
+    return sessions.filter((s) =>
+      s.user.name.toLowerCase().includes(searchQuery.toLowerCase()),
     );
+  }, [sessions, searchQuery]);
 
-    socket.emit("send_message", {
-      senderId: adminId,
-      receiverId: activeUserId,
-      text: inputText,
-      tempId: tempId,
-    });
-
-    setInputText("");
-    // Clear typing indicator immediately upon send
-    socket.emit("stop_typing", { senderId: adminId, receiverId: activeUserId });
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setInputText(e.target.value);
-    if (!socket || !adminId || !activeUserId) return;
-
-    socket.emit("typing", { senderId: adminId, receiverId: activeUserId });
-
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-      socket.emit("stop_typing", {
-        senderId: adminId,
-        receiverId: activeUserId,
-      });
-    }, 2000);
-  };
-
-  if (sessionStatus === "loading") {
+  if (loading)
     return (
-      <div className="flex h-[500px] items-center justify-center">
-        <Loader2 className="animate-spin text-blue-600" />
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="animate-spin text-green-600 w-10 h-10" />
       </div>
     );
-  }
 
   return (
-    <div className="flex h-[calc(100vh-140px)] bg-white rounded-xl shadow-sm border overflow-hidden">
-      {/* Sidebar - Sessions List */}
-      <div className="w-80 border-r bg-gray-50 flex flex-col shrink-0">
-        <div className="p-4 border-b bg-white flex justify-between items-center">
-          <h2 className="font-semibold text-gray-800">Conversations</h2>
-          <Volume2 className="h-4 w-4 text-gray-400" />
+    <div className="flex h-screen bg-white overflow-hidden">
+      {/* LEFT PANE: Chat List Sidebar */}
+      <div
+        className={clsx(
+          "w-full md:w-[350px] lg:w-[400px] border-r flex flex-col bg-gray-50/50 transition-all",
+          selectedPartner ? "hidden md:flex" : "flex", // Hide list on mobile if a chat is active
+        )}
+      >
+        <div className="p-4 border-b bg-white">
+          <h1 className="text-xl font-bold text-gray-800 mb-4">Чаты</h1>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Поиск..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-gray-100 rounded-xl py-2 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
+            />
+          </div>
         </div>
+
         <div className="flex-1 overflow-y-auto">
-          {activeSessions.map((session: any) => (
-            <div
-              key={session.id}
-              onClick={() => {
-                setActiveUserId(session.userId);
-                router.replace(`/chat?userId=${session.userId}`, {
-                  scroll: false,
-                });
-              }}
-              className={`p-4 border-b cursor-pointer transition-colors ${
-                activeUserId === session.userId
-                  ? "bg-white border-l-4 border-l-blue-600"
-                  : "hover:bg-gray-100"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <UserCircle className="text-gray-400 h-10 w-10" />
-                  {session.user?.isOnline && (
-                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
-                  )}
-                </div>
-                <div className="flex-1 overflow-hidden">
-                  <div className="flex justify-between items-center">
-                    <h3 className="font-semibold text-sm truncate">
-                      {session.user?.name || "User"}
-                    </h3>
-                    {session.unreadCount > 0 && (
-                      <span className="bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-full">
-                        {session.unreadCount}
-                      </span>
+          {filteredSessions.map((chat) => {
+            const visitorId = chat.userId;
+            const isOnline = onlineUsers.has(visitorId);
+            const lastActive =
+              lastSeenMap[visitorId] || chat.lastSeen || chat.lastMessageTime;
+
+            return (
+              <div
+                key={visitorId}
+                onClick={() =>
+                  setSelectedPartner({ id: visitorId, name: chat.user.name })
+                }
+                className={clsx(
+                  "flex items-center gap-3 p-4 border-b cursor-pointer hover:bg-gray-100 transition-colors",
+                  selectedPartner?.id === visitorId &&
+                    "bg-green-50/80 border-l-4 border-l-green-500",
+                )}
+              >
+                <div className="relative shrink-0">
+                  <div
+                    className={clsx(
+                      "w-12 h-12 rounded-full overflow-hidden border-2",
+                      isOnline ? "border-green-500" : "border-gray-200",
+                    )}
+                  >
+                    {chat.user.image ? (
+                      <img
+                        src={chat.user.image}
+                        className="w-full h-full object-cover"
+                        alt=""
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gray-200 flex items-center justify-center">
+                        <UserCircle className="w-8 h-8 text-gray-400" />
+                      </div>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 truncate">
-                    {session.lastMessage}
+                  {isOnline && (
+                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full" />
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-baseline">
+                    <h3 className="font-bold text-sm text-gray-900 truncate">
+                      {chat.user.name}
+                    </h3>
+                    <span className="text-[10px] text-gray-400">
+                      {formatDistanceToNow(new Date(chat.lastMessageTime), {
+                        addSuffix: true,
+                        locale: ru,
+                      })}
+                    </span>
+                  </div>
+                  <p
+                    className={clsx(
+                      "text-xs truncate mt-0.5",
+                      chat.unreadCount > 0
+                        ? "text-black font-bold"
+                        : "text-gray-500",
+                    )}
+                  >
+                    {chat.lastMessage}
                   </p>
                 </div>
+
+                {chat.unreadCount > 0 && (
+                  <span className="bg-green-600 text-white text-[10px] font-bold h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full">
+                    {chat.unreadCount}
+                  </span>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
-      {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col bg-white min-w-0">
-        {activeUserId ? (
-          <>
-            <div className="p-4 border-b flex justify-between items-center shadow-sm">
-              <div className="flex items-center gap-3">
-                <UserCircle className="h-10 w-10 text-gray-400" />
-                <div className="flex flex-col">
-                  <h2 className="font-bold text-gray-800">
-                    {currentActiveSession?.user?.name || "User"}
-                  </h2>
-                  <p
-                    className={`text-xs ${isTyping ? "text-blue-500 animate-pulse" : "text-gray-400"}`}
-                  >
-                    {isTyping
-                      ? "typing..."
-                      : currentActiveSession?.user?.isOnline
-                        ? "Online"
-                        : "Offline"}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => resolveTicket(activeUserId)}
-                className="text-sm bg-gray-100 px-4 py-2 rounded-md hover:bg-green-100"
-              >
-                Close Ticket
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#f8f9fa]">
-              {messages.map((msg: any, i: number) => {
-                const isAdmin = String(msg.senderId) === adminId;
-                return (
-                  <div
-                    key={msg.id || i}
-                    className={`flex ${isAdmin ? "justify-end" : "justify-start"}`}
-                  >
-                    <div
-                      className={`max-w-[70%] rounded-2xl px-4 py-2 ${isAdmin ? "bg-blue-600 text-white" : "bg-white border"}`}
-                    >
-                      <p className="text-sm">{msg.text}</p>
-                      <div className="flex items-center justify-end gap-1 mt-1 opacity-70 text-[10px]">
-                        {new Date(msg.createdAt).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                        {isAdmin &&
-                          (msg.isRead ? (
-                            <CheckCheck className="h-3 w-3 text-blue-200" />
-                          ) : (
-                            <Check className="h-3 w-3" />
-                          ))}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-              <div ref={messagesEndRef} />
-            </div>
-
-            <form
-              onSubmit={handleSendMessage}
-              className="p-4 border-t flex gap-2"
-            >
-              <input
-                value={inputText}
-                onChange={handleInputChange}
-                placeholder="Type message..."
-                className="flex-1 bg-gray-100 rounded-full px-5 py-2 outline-none"
-              />
-              <button
-                type="submit"
-                disabled={!inputText.trim()}
-                className="bg-blue-600 text-white rounded-full p-2 h-10 w-10 flex items-center justify-center disabled:opacity-50"
-              >
-                <Send className="h-4 w-4" />
-              </button>
-            </form>
-          </>
+      {/* RIGHT PANE: Active Chat Detail */}
+      <div
+        className={clsx(
+          "flex-1 flex flex-col bg-white transition-all",
+          !selectedPartner ? "hidden md:flex" : "flex",
+        )}
+      >
+        {selectedPartner ? (
+          <AdminChatDetail
+            adminId={adminId}
+            partnerId={selectedPartner.id}
+            partnerName={selectedPartner.name}
+            onBack={() => {
+              // Clear URL parameter so it doesn't auto-open again if they hit refresh
+              window.history.replaceState(null, "", "/chat");
+              setSelectedPartner(null);
+            }}
+          />
         ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-400">
-            <MessageSquare className="h-12 w-12 mr-2" /> Select a user to start
+          <div className="flex-1 flex flex-col items-center justify-center text-gray-400 bg-gray-50">
+            <MessageSquare className="w-16 h-16 opacity-20 mb-4" />
+            <p>Выберите чат для начала общения</p>
           </div>
         )}
       </div>
     </div>
-  );
-}
-
-export default function AdminChatPage() {
-  return (
-    <Suspense fallback={<div className="p-8 text-center">Loading...</div>}>
-      <ChatInterface />
-    </Suspense>
   );
 }
