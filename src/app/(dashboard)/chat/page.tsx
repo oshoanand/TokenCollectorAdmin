@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, Suspense } from "react";
+import { useEffect, useState, useMemo, Suspense, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import axios from "axios";
@@ -34,6 +34,7 @@ function AdminChatPage() {
   const queryUserId = searchParams.get("userId");
 
   // Global State
+  const socket = useChatStore((state) => state.socket); // <-- ADDED for real-time sync
   const onlineUsers = useChatStore((state) => state.onlineUsers);
   const lastSeenMap = useChatStore((state) => state.lastSeenMap);
   const setOnlineStatusBulk = useChatStore(
@@ -50,10 +51,13 @@ function AdminChatPage() {
     name: string;
   } | null>(null);
 
-  // Fetch Chat List
-  useEffect(() => {
-    if (!adminId) return;
-    const fetchSessions = async () => {
+  // --- 1. OPTIMIZED FETCH FUNCTION ---
+  // Wrapped in useCallback so we can safely trigger it from socket listeners
+  const fetchSessions = useCallback(
+    async (isSilent = false) => {
+      if (!adminId) return;
+      if (!isSilent) setLoading(true);
+
       try {
         const API_URL =
           process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8800";
@@ -76,24 +80,45 @@ function AdminChatPage() {
       } finally {
         setLoading(false);
       }
-    };
-    fetchSessions();
-  }, [adminId, refreshTrigger, setOnlineStatusBulk]);
+    },
+    [adminId, setOnlineStatusBulk],
+  );
 
-  // --- NEW: Auto-Select Partner from URL ---
+  // Initial fetch and manual refresh trigger
+  useEffect(() => {
+    fetchSessions(sessions.length > 0);
+  }, [fetchSessions, refreshTrigger, sessions.length]);
+
+  // --- 2. REAL-TIME BACKGROUND SYNC ---
+  // Refetches the chat list silently if new messages arrive or are marked read globally
+  useEffect(() => {
+    if (!socket || !adminId) return;
+
+    const handleSilentRefresh = () => {
+      fetchSessions(true);
+    };
+
+    socket.on("receive_message", handleSilentRefresh);
+    socket.on("read_status_synced", handleSilentRefresh);
+    socket.on("messages_read_by_recipient", handleSilentRefresh);
+
+    return () => {
+      socket.off("receive_message", handleSilentRefresh);
+      socket.off("read_status_synced", handleSilentRefresh);
+      socket.off("messages_read_by_recipient", handleSilentRefresh);
+    };
+  }, [socket, adminId, fetchSessions]);
+
+  // Auto-Select Partner from URL
   useEffect(() => {
     if (queryUserId && !loading) {
-      // Check if we already have an active session with this user
       const existingSession = sessions.find((s) => s.userId === queryUserId);
-
       if (existingSession) {
         setSelectedPartner({
           id: existingSession.userId,
           name: existingSession.user.name,
         });
       } else {
-        // If no session exists, it's a new chat. We set a default name.
-        // Optional: You could fetch the user's name from your backend here if you want it to be perfect.
         setSelectedPartner({ id: queryUserId, name: "Новый чат (Клиент)" });
       }
     }
@@ -105,12 +130,13 @@ function AdminChatPage() {
     );
   }, [sessions, searchQuery]);
 
-  if (loading)
+  if (loading && sessions.length === 0) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="animate-spin text-green-600 w-10 h-10" />
       </div>
     );
+  }
 
   return (
     <div className="flex h-screen bg-white overflow-hidden">
@@ -118,16 +144,18 @@ function AdminChatPage() {
       <div
         className={clsx(
           "w-full md:w-[350px] lg:w-[400px] border-r flex flex-col bg-gray-50/50 transition-all",
-          selectedPartner ? "hidden md:flex" : "flex", // Hide list on mobile if a chat is active
+          selectedPartner ? "hidden md:flex" : "flex",
         )}
       >
         <div className="p-4 border-b bg-white">
-          <h1 className="text-xl font-bold text-gray-800 mb-4">Чаты</h1>
+          <h1 className="text-xl font-bold text-gray-800 mb-4">
+            Чаты клиентов
+          </h1>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Поиск..."
+              placeholder="Поиск клиента..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-gray-100 rounded-xl py-2 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-green-500"
@@ -145,9 +173,16 @@ function AdminChatPage() {
             return (
               <div
                 key={visitorId}
-                onClick={() =>
-                  setSelectedPartner({ id: visitorId, name: chat.user.name })
-                }
+                onClick={() => {
+                  // --- 3. OPTIMISTIC UI FIX ---
+                  // Instantly wipe the local unread count from the sidebar so it feels fast
+                  setSessions((prev) =>
+                    prev.map((s) =>
+                      s.userId === visitorId ? { ...s, unreadCount: 0 } : s,
+                    ),
+                  );
+                  setSelectedPartner({ id: visitorId, name: chat.user.name });
+                }}
                 className={clsx(
                   "flex items-center gap-3 p-4 border-b cursor-pointer hover:bg-gray-100 transition-colors",
                   selectedPartner?.id === visitorId &&
@@ -204,7 +239,7 @@ function AdminChatPage() {
 
                 {chat.unreadCount > 0 && (
                   <span className="bg-green-600 text-white text-[10px] font-bold h-5 min-w-[20px] px-1.5 flex items-center justify-center rounded-full">
-                    {chat.unreadCount}
+                    {chat.unreadCount > 99 ? "99+" : chat.unreadCount}
                   </span>
                 )}
               </div>
@@ -226,7 +261,6 @@ function AdminChatPage() {
             partnerId={selectedPartner.id}
             partnerName={selectedPartner.name}
             onBack={() => {
-              // Clear URL parameter so it doesn't auto-open again if they hit refresh
               window.history.replaceState(null, "", "/chat");
               setSelectedPartner(null);
             }}
